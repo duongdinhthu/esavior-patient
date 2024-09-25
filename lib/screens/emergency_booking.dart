@@ -60,6 +60,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
 
   Future<void> _getDriverLocationAndUpdateMap(int? driverId) async {
     print('Đang lấy vị trí tài xế...');
+    print(driverId.toString() + " day la id ai xe");
     try {
       // Gọi API với driverId được truyền qua đường dẫn
       final response = await http.get(
@@ -70,10 +71,10 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final double latitude = data['driverLatitude'];
-        final double longitude = data['driverLongitude'];
+        final double latitude = data['latitude'];
+        final double longitude = data['longitude'];
         LatLng driverLocation = LatLng(latitude, longitude);
-        print(driverLocation);
+        print(driverLocation.toString() + " toa do tai xe");
 
         setState(() {
           _driverLocation = driverLocation;
