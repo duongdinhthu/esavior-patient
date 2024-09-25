@@ -1,0 +1,38 @@
+name: esavior_project
+description: "A new Flutter project."
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0" # Cập nhật SDK cho phù hợp với Dart 3.5.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^0.13.5  # Thêm lại gói http
+  video_player: ^2.9.1
+  image_picker: ^0.8.4+2
+  google_maps_flutter: ^2.2.1  # Gói google maps nếu bạn vẫn sử dụng
+  cupertino_icons: ^1.0.8
+  url_launcher: ^6.0.20
+  geocoding: ^2.0.0 # Dùng để chuyển đổi địa chỉ thành tọa độ
+  geolocator: ^9.0.0
+  shared_preferences: ^2.0.12
+  permission_handler: ^10.2.0
+  intl: ^0.18.0
+
+  flutter_map: any
+  latlong2: any
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.10.0
+flutter:
+  uses-material-design: true
+
+  # Thêm assets vào đây
+  assets:
+    - assets/images/
