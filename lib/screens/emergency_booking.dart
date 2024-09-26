@@ -180,8 +180,6 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
   }
 
   void _clearBookingStatus() async {
-    updateLocation = true;
-    _upDateBookingStatus(bookingId1);
     print("=== Cập nhật trạng thái driver sau khi clear booking====");
     print(driverId2);
     String status1 = "Active";
@@ -198,16 +196,12 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     }
     setState(() {
       isSuccessBooked = false;
-      _currentLocation = null;
       _hospitalLocation = null;
       _destinationLocation = null;
       _driverName = '';
       _driverPhone = '';
     });
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => EmergencyBooking()),
-    );
+
 
     // Gọi hàm cập nhật trạng thái đặt chỗ
 
@@ -258,6 +252,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
 
       if (response.statusCode == 200) {
         showTemporaryMessage(context, "Emergency booking complete!");
+        _clearBookingStatus();
       } else {
         showTemporaryMessage(context, "Error during submit, Please try again.");
         print('Error: ${response.statusCode}, ${response.body}');
@@ -564,15 +559,15 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     Future<void> _checkBookingStatus(int? bookingId1) async {
       try {
         // Gọi API để kiểm tra trạng thái booking
-        final response = await http.get(Uri.parse('https://example.com/api/bookings/$bookingId1'));
-
+        final response = await http.get(Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/$bookingId1'));
+        print('check status booking with booking ' + bookingId1.toString());
         if (response.statusCode == 200) {
           // Parse JSON
           final bookingData = jsonDecode(response.body);
 
           // Kiểm tra nếu `type` là 'Completed'
           if (bookingData['type'] == 'Completed') {
-            // Gọi hàm khác nếu booking đã hoàn thành
+            _clearBookingStatus();
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => EmergencyBooking()),
@@ -989,7 +984,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                                             ),
                                             TextButton(
                                               onPressed: () {
-                                                _clearBookingStatus();
+                                                _upDateBookingStatus(bookingId1);
                                                 Navigator.of(context).pop();
                                               },
                                               child: const Text(
