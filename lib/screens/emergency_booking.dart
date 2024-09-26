@@ -50,6 +50,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
   int? driverId2;
   int? patientId;
   int? bookingId1;
+  Timer? _timer;
+
   @override
   void initState() {
     super.initState();
@@ -202,6 +204,10 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       _driverName = '';
       _driverPhone = '';
     });
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => EmergencyBooking()),
+    );
 
     // Gọi hàm cập nhật trạng thái đặt chỗ
 
@@ -555,6 +561,35 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       pickupAddress = hospitalNameController.text;
     }
 
+    Future<void> _checkBookingStatus(int? bookingId1) async {
+      try {
+        // Gọi API để kiểm tra trạng thái booking
+        final response = await http.get(Uri.parse('https://example.com/api/bookings/$bookingId1'));
+
+        if (response.statusCode == 200) {
+          // Parse JSON
+          final bookingData = jsonDecode(response.body);
+
+          // Kiểm tra nếu `type` là 'Completed'
+          if (bookingData['type'] == 'Completed') {
+            // Gọi hàm khác nếu booking đã hoàn thành
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => EmergencyBooking()),
+            );
+          }
+        } else {
+          print('Failed to load booking');
+        }
+      } catch (e) {
+        print('Error: $e');
+      }
+    }
+    void startCheckingBookingStatus(int? bookingId1) {
+      _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) async {
+        await _checkBookingStatus(bookingId1);
+      });
+    }
     if (bookingLocation != null && _estimatedCost != null) {
       final bookingData = {
         'patient': {'email': email},
@@ -582,6 +617,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
           final bookingResponse = json.decode(response.body); // Lấy phản hồi
           bookingId1 =
               bookingResponse['bookingId'];
+          startCheckingBookingStatus(bookingId1);
           print(bookingId1.toString() + " =========== booking Id"); // Lấy bookingId từ phản hồi API
           _bookingId = bookingId1.toString();
           _findNearestDriver(
