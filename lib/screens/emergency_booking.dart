@@ -564,9 +564,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
         if (response.statusCode == 200) {
           // Parse JSON
           final bookingData = jsonDecode(response.body);
-
           // Kiểm tra nếu `type` là 'Completed'
-          if (bookingData['type'] == 'Completed') {
+          if (bookingData['bookingStatus'] == 'Completed') {
             _clearBookingStatus();
             Navigator.pushReplacement(
               context,
