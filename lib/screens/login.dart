@@ -2,6 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:google_sign_in/google_sign_in.dart';
+
+import 'google_signin_button.dart';
 
 const primaryColor = Color.fromARGB(255, 200, 50, 0);
 const whiteColor = Color.fromARGB(255, 255, 255, 255);
@@ -18,7 +21,11 @@ class Login extends StatefulWidget {
 }
 
 class _LoginState extends State<Login> {
-
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: [
+      'email',
+    ],
+  );
   String name = '';
   String email = '';
   String phone = '';
@@ -419,6 +426,7 @@ class _LoginState extends State<Login> {
             const SizedBox(
               height: 20,
             ),
+
             SizedBox(
               width: double.infinity,
               child: TextFormField(
@@ -556,6 +564,19 @@ class _LoginState extends State<Login> {
                 const SizedBox(
                   width: 10,
                 ),
+                // Nút đăng nhập Google
+                GoogleSignInButton(
+                  onLoginSuccess: (patientName, patientId) {
+                    print('Logged in with Google: $patientName');
+
+                    // Gọi hàm xử lý đăng nhập với ID bệnh nhân từ Google Login
+                    widget.onLogin(int.parse(patientId));
+                    // Hiển thị thông báo đăng nhập thành công
+                    // Điều hướng về trang trước hoặc Home
+                    Navigator.pop(context);
+                  },
+                ),
+
                 Container(
                   alignment: Alignment.centerLeft,
                   child: GestureDetector(
