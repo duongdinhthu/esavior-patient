@@ -110,6 +110,14 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
 
     return password;
   }
+  void resetScreen() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EmergencyBooking(),
+      ),
+    );
+  }
 
   Future<void> callPhoneNumber(String phoneNumber) async {
     final Uri launchUri = Uri(
@@ -201,6 +209,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       _driverName = '';
       _driverPhone = '';
     });
+    resetScreen();
 
 
     // Gọi hàm cập nhật trạng thái đặt chỗ
