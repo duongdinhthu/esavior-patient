@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'google_signin_button.dart';
 
 const primaryColor = Color.fromARGB(255, 200, 50, 0);
 const whiteColor = Color.fromARGB(255, 255, 255, 255);
@@ -44,6 +46,15 @@ class _ProfileState extends State<Profile> {
       fetchPatientData();
     });
   }
+  Future<void> _logout() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove('patient_id');
+    await prefs.setBool('isLoggedIn', false);
+
+    // Điều hướng về trang đăng nhập
+    Navigator.pushReplacementNamed(context, '/login');
+  }
+
 
   Future<void> fetchPatientData() async {
     setState(() {
@@ -127,6 +138,7 @@ class _ProfileState extends State<Profile> {
                               ElevatedButton(
                                 onPressed: () {
                                   Navigator.pushNamed(context, '/login');
+
                                 },
                                 style: ElevatedButton.styleFrom(
                                   shape: RoundedRectangleBorder(
@@ -670,7 +682,7 @@ class _ProfileState extends State<Profile> {
                                             TextButton(
                                               onPressed: () {
                                                 Navigator.of(context).pop();
-                                                widget.onLogout();
+                                                _logout();
                                               },
                                               child: const Text(
                                                 'Logout',

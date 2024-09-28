@@ -2,8 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:google_sign_in/google_sign_in.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'google_signin_button.dart';
 
 const primaryColor = Color.fromARGB(255, 200, 50, 0);
@@ -20,12 +19,30 @@ class Login extends StatefulWidget {
   _LoginState createState() => _LoginState();
 }
 
+
 class _LoginState extends State<Login> {
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: [
-      'email',
-    ],
-  );
+  @override
+  void initState() {
+    super.initState();  // Đảm bảo đây là dòng đầu tiên trong initState
+    _checkLoginStatus();
+  }
+
+  Future<void> _checkLoginStatus() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+    int? patientId = prefs.getInt('patient_id');
+
+    if (isLoggedIn && patientId != null) {
+      // Người dùng đã đăng nhập
+      widget.onLogin(patientId);
+    } else {
+      // Người dùng chưa đăng nhập, chuyển hướng đến trang đăng nhập
+      setState(() {
+        // Có thể cập nhật trạng thái UI nếu cần, như hiển thị form đăng nhập
+      });    }
+  }
+
+
   String name = '';
   String email = '';
   String phone = '';
@@ -70,6 +87,11 @@ class _LoginState extends State<Login> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final int patientId = data['patient_id'];
+
+        // Lưu trạng thái đăng nhập vào SharedPreferences
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('patient_id', patientId);
+        await prefs.setBool('isLoggedIn', true);  // Đánh dấu rằng người dùng đã đăng nhập
         widget.onLogin(patientId);
         showTemporaryMessage(context, "Log in successfully!");
         Navigator.pop(context);
@@ -84,6 +106,12 @@ class _LoginState extends State<Login> {
         isLoading = false;
       });
     }
+  }
+
+  Future<void> _logout() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove('patient_id');
+    await prefs.setBool('isLoggedIn', false);  // Đánh dấu là chưa đăng nhập
   }
 
   Future<void> _handleRegister() async {
@@ -566,16 +594,18 @@ class _LoginState extends State<Login> {
                 ),
                 // Nút đăng nhập Google
                 GoogleSignInButton(
-                  onLoginSuccess: (patientName, patientId) {
+                  onLoginSuccess: (patientName, patientId) async {
                     print('Logged in with Google: $patientName');
 
-                    // Gọi hàm xử lý đăng nhập với ID bệnh nhân từ Google Login
+                    // Lưu trạng thái đăng nhập Google vào SharedPreferences
+                    SharedPreferences prefs = await SharedPreferences.getInstance();
+                    await prefs.setInt('patient_id', int.parse(patientId));
+
                     widget.onLogin(int.parse(patientId));
-                    // Hiển thị thông báo đăng nhập thành công
-                    // Điều hướng về trang trước hoặc Home
                     Navigator.pop(context);
                   },
                 ),
+
 
                 Container(
                   alignment: Alignment.centerLeft,

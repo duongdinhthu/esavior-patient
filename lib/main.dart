@@ -15,6 +15,7 @@ import 'package:esavior_project/screens/library.dart';
 import 'package:esavior_project/screens/login.dart';
 import 'package:esavior_project/screens/profile.dart';
 import 'package:esavior_project/screens/user.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const primaryColor = Color.fromARGB(255, 200, 50, 0);
 const whiteColor = Color.fromARGB(255, 255, 255, 255);
@@ -43,13 +44,41 @@ class _MyAppState extends State<MyApp> {
       this.patientId = patientId;
     });
   }
+  void checkLoginStatus() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    int? storedPatientId = prefs.getInt('patient_id');
 
-  void handleLogout(BuildContext context) {
+    if (storedPatientId != null) {
+      // Đã đăng nhập trước đó
+      setState(() {
+        isLoggedIn = true;
+        patientId = storedPatientId;
+      });
+    } else {
+      // Chưa đăng nhập
+      setState(() {
+        isLoggedIn = false;
+        patientId = null;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    checkLoginStatus();  // Kiểm tra trạng thái đăng nhập khi ứng dụng khởi động
+  }
+
+  void handleLogout(BuildContext context) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isLoggedIn', false);
+    await prefs.remove('patient_id');  // Xóa luôn patient_id để chắc chắn
     setState(() {
       isLoggedIn = false;
       patientId = null;
     });
   }
+
 
   void _onItemTapped(int index) {
     setState(() {
