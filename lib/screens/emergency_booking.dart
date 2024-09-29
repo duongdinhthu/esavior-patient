@@ -55,9 +55,10 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
   @override
   void initState() {
     super.initState();
-    _loadHospitals();
-    _startTrackingLocation();
-    _loadBookingStatus();
+    _loadHospitals();  // Tải danh sách bệnh viện
+    _loadMarkerPositions();  // Khôi phục lại vị trí tài xế và các thông tin đã lưu
+    _startTrackingLocation();  // Bắt đầu theo dõi vị trí
+    _loadBookingStatus();  // Kiểm tra trạng thái đặt chỗ
   }
 
   Future<void> _getDriverLocationAndUpdateMap(int? driverId) async {
@@ -111,6 +112,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     return password;
   }
   void resetScreen() {
+    print("Resetting screen with context: $context");
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -118,6 +120,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       ),
     );
   }
+
 
   Future<void> callPhoneNumber(String phoneNumber) async {
     final Uri launchUri = Uri(
@@ -139,7 +142,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     prefs.setDouble('destinationLat', _destinationLocation!.latitude);
     prefs.setDouble('destinationLng', _destinationLocation!.longitude);
     prefs.setString('driverName', _driverName);
-    prefs.setString('driverPhone', _driverPhone);
+    prefs.setString('driverPhone', _driverPhone); // Lưu driverPhone
     prefs.setString('bookingId', _bookingId);
     prefs.setString('driverId', _driverId);
   }
@@ -154,30 +157,40 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     final String? driverPhone = prefs.getString('driverPhone');
     final String? bookingId = prefs.getString('bookingId');
     final String? driverId = prefs.getString('driverId');
-    setState(() {
-      _currentLocation = LatLng(currentLat!, currentLng!);
-      _destinationLocation = LatLng(destinationLat!, destinationLng!);
-      _driverName = driverName!;
-      _driverPhone = driverPhone!;
-      _bookingId = bookingId!;
-      _driverId = driverId!;
-    });
-    print(_driverId);
-    _locationTimer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
-      try {
-        print("id tai xe " + driverId2.toString() + "  lasy vi tri tai xe");
-        _getDriverLocationAndUpdateMap(driverId2);
-        if (updateLocation == false) {
-          if(_currentLocation != null){
-            print(_currentLocation);
-            _sendLocationUpdate();
+
+    // Kiểm tra nếu có dữ liệu thì mới khôi phục trạng thái
+    if (currentLat != null && currentLng != null && destinationLat != null && destinationLng != null) {
+      setState(() {
+        _currentLocation = LatLng(currentLat, currentLng);
+        _destinationLocation = LatLng(destinationLat, destinationLng);
+        _driverName = driverName!;
+        _driverPhone = driverPhone!;
+        _bookingId = bookingId!;
+        _driverId = driverId!;
+        _locationTimer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
+          try {
+            print("id tài xế " + driverId2.toString() + " đang lấy vị trí tài xế hoặc  " + _driverId.toString());
+            _getDriverLocationAndUpdateMap(int.parse(_driverId));
+            if (!updateLocation) {
+              if (_currentLocation != null) {
+                print(_currentLocation);
+                _sendLocationUpdate();
+              }
+            }
+          } catch (e) {
+            print('Error converting driver ID to int: $e');
           }
-        }
-      } catch (e) {
-        print('Error converting driver ID to int: $e');
-      }
-    });
+        });
+      });
+      print(_driverId);
+    } else {
+      // Nếu không có dữ liệu, bạn có thể để trống
+      print("Không có dữ liệu đã lưu");
+    }
+
+
   }
+
 
   void _loadBookingStatus() async {
     print('load booking status');
@@ -187,36 +200,47 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     });
   }
 
-  void _clearBookingStatus() async {
+  Future<void> _clearBookingStatus() async {
     print("=== Cập nhật trạng thái driver sau khi clear booking====");
-    print(driverId2);
+    print(driverId2 ?? _driverId);
+
     String status1 = "Active";
-    await _updateDriverStatus(driverId2,
-        status1);
-    print('chuyen trang thai thanh da xong');
+    if (driverId2 != null) {
+      await _updateDriverStatus(driverId2, status1);
+    } else {
+      await _updateDriverStatus(int.parse(_driverId), status1);
+    }
+    print('Chuyển trạng thái thành đã xong');
+
+    // Xóa tất cả các dữ liệu trong SharedPreferences
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('isSuccessBooked');
-    print("");
+    await prefs.clear();  // Thêm dòng này để xóa hết dữ liệu đã lưu
+
     // Cập nhật trạng thái ban đầu
     if (_locationTimer != null) {
       _locationTimer!.cancel();
       print("Timer stopped");
     }
+
     setState(() {
-      isSuccessBooked = false;
-      _hospitalLocation = null;
-      _destinationLocation = null;
-      _driverName = '';
-      _driverPhone = '';
+      isSuccessBooked = false;  // Đặt lại trạng thái đặt chỗ
+      _hospitalLocation = null;  // Xóa vị trí bệnh viện
+      _destinationLocation = null;  // Xóa vị trí điểm đến
+      _driverName = '';  // Xóa tên tài xế
+      _driverPhone = '';  // Xóa số điện thoại tài xế
+      _driverId = '';  // Xóa ID tài xế
+      _bookingId = '';  // Xóa ID đặt chỗ
     });
-    resetScreen();
 
+    print("Calling resetScreen");
 
-    // Gọi hàm cập nhật trạng thái đặt chỗ
-
-    // Cập nhật trạng thái driver sau khi clear booking'
-     // Chuyển driverId thành chuỗi và đợi cập nhật trạng thái
+    // Đợi một khoảng thời gian nhỏ trước khi reset màn hình
+    Future.delayed(Duration(milliseconds: 100), () {
+      resetScreen();
+    });
   }
+
+
 
   Future<void> _updateDriverStatus(int? driverId, String status) async {
     try {
@@ -232,6 +256,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       );
 
       if (response.statusCode == 200) {
+
         print("Driver status updated successfully!");
       } else {
         print('Error: ${response.statusCode}, ${response.body}');
@@ -261,6 +286,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
 
       if (response.statusCode == 200) {
         showTemporaryMessage(context, "Emergency booking complete!");
+        print('goi clearBooking');
         _clearBookingStatus();
       } else {
         showTemporaryMessage(context, "Error during submit, Please try again.");
@@ -692,7 +718,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                 _driverPhone = activeDrivers[0]['driverPhone'];
                 driverPhone = _driverPhone;
                 driverName = _driverName;
-
+                _driverId = activeDrivers[0]['driverId'].toString();
+                _saveMarkerPositions();
                 print(driverName);
                 print(driverPhone);
               final driverIdStr = activeDrivers[0]['driverId'].toString();
@@ -707,8 +734,21 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                 await _updateBookingWithDriverId(driverId, bookingId1);
                 getDriverLocation = true;
                 if (updateLocation == false) {
-                  _loadMarkerPositions();
-                    print(driverId.toString() + " dang cap nhat gui vi tri + thu vi tri");
+                  _locationTimer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
+                    try {
+                      print("id tài xế " + driverId2.toString() + " đang lấy vị trí tài xế");
+                      _getDriverLocationAndUpdateMap(driverId2);
+                      if (!updateLocation) {
+                        if (_currentLocation != null) {
+                          print(_currentLocation);
+                          _sendLocationUpdate();
+                        }
+                      }
+                    } catch (e) {
+                      print('Error converting driver ID to int: $e');
+                    }
+                  });
+                  print(driverId.toString() + " dang cap nhat gui vi tri + thu vi tri");
                 }
               } else {
                 print("Error converting driver ID to int");
@@ -897,8 +937,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                               Padding(
                                 padding: const EdgeInsets.only(left: 10),
                                 child: Text(
-                                  'Driver: $driverName',
-
+                                  'Driver: ${driverName ?? _driverName}',  // Kiểm tra nếu driverName là null thì lấy từ _driverName đã lưu
                                   style: const TextStyle(
                                       color: blackColor,
                                       fontWeight: FontWeight.bold,
@@ -912,7 +951,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                               Padding(
                                 padding: const EdgeInsets.only(left: 10),
                                 child: Text(
-                                  'Phone Number: $driverPhone',
+                                  'Phone Number: ${driverPhone ?? _driverPhone}',  // Kiểm tra nếu driverPhone là null thì lấy _driverPhone từ SharedPreferences
                                   style: const TextStyle(
                                       color: blackColor,
                                       fontWeight: FontWeight.bold,
@@ -930,7 +969,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                                 width: 150,
                                 child: ElevatedButton(
                                   onPressed: () =>
-                                      callPhoneNumber(_driverPhone),
+                                      callPhoneNumber(driverPhone ?? _driverPhone),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: primaryColor,
                                     shape: RoundedRectangleBorder(
@@ -992,7 +1031,15 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                                             ),
                                             TextButton(
                                               onPressed: () {
-                                                _upDateBookingStatus(bookingId1);
+                                                if(bookingId1 != null){
+                                                  _upDateBookingStatus(bookingId1);
+                                                }else{
+                                                  try {
+                                                    _upDateBookingStatus(int.parse(_bookingId));
+                                                  } catch (e) {
+                                                    print('Error converting _bookingId to int: $e');
+                                                  }
+                                                }
                                                 Navigator.of(context).pop();
                                               },
                                               child: const Text(
