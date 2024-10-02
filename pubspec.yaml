@@ -25,6 +25,8 @@ dependencies:
   google_sign_in: any
   flutter_map: any
   latlong2: any
+  web_socket_channel: any
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

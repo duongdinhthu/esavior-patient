@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_socket_channel/io.dart';
 
 const primaryColor = Color.fromARGB(255, 200, 50, 0);
 const whiteColor = Color.fromARGB(255, 255, 255, 255);
@@ -51,14 +52,16 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
   int? patientId;
   int? bookingId1;
   Timer? _timer;
+  IOWebSocketChannel? _channel; // Biến toàn cục để lưu WebSocket channel
+  List<String> messages = []; // Danh sách lưu trữ tin nhắn
 
   @override
   void initState() {
     super.initState();
-    _loadHospitals();  // Tải danh sách bệnh viện
-    _loadMarkerPositions();  // Khôi phục lại vị trí tài xế và các thông tin đã lưu
-    _startTrackingLocation();  // Bắt đầu theo dõi vị trí
-    _loadBookingStatus();  // Kiểm tra trạng thái đặt chỗ
+    _loadHospitals(); // Tải danh sách bệnh viện
+    _loadMarkerPositions(); // Khôi phục lại vị trí tài xế và các thông tin đã lưu
+    _startTrackingLocation(); // Bắt đầu theo dõi vị trí
+    _loadBookingStatus(); // Kiểm tra trạng thái đặt chỗ
   }
 
   Future<void> _getDriverLocationAndUpdateMap(int? driverId) async {
@@ -111,6 +114,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
 
     return password;
   }
+
   void resetScreen() {
     print("Resetting screen with context: $context");
     Navigator.pushReplacement(
@@ -120,7 +124,6 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       ),
     );
   }
-
 
   Future<void> callPhoneNumber(String phoneNumber) async {
     final Uri launchUri = Uri(
@@ -159,7 +162,10 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     final String? driverId = prefs.getString('driverId');
 
     // Kiểm tra nếu có dữ liệu thì mới khôi phục trạng thái
-    if (currentLat != null && currentLng != null && destinationLat != null && destinationLng != null) {
+    if (currentLat != null &&
+        currentLng != null &&
+        destinationLat != null &&
+        destinationLng != null) {
       setState(() {
         _currentLocation = LatLng(currentLat, currentLng);
         _destinationLocation = LatLng(destinationLat, destinationLng);
@@ -169,7 +175,10 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
         _driverId = driverId!;
         _locationTimer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
           try {
-            print("id tài xế " + driverId2.toString() + " đang lấy vị trí tài xế hoặc  " + _driverId.toString());
+            print("id tài xế " +
+                driverId2.toString() +
+                " đang lấy vị trí tài xế hoặc  " +
+                _driverId.toString());
             _getDriverLocationAndUpdateMap(int.parse(_driverId));
             if (!updateLocation) {
               if (_currentLocation != null) {
@@ -181,16 +190,16 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
             print('Error converting driver ID to int: $e');
           }
         });
+        if (_bookingId != null) {
+          _openWebSocketConnection(int.parse(_bookingId));
+        }
       });
       print(_driverId);
     } else {
       // Nếu không có dữ liệu, bạn có thể để trống
       print("Không có dữ liệu đã lưu");
     }
-
-
   }
-
 
   void _loadBookingStatus() async {
     print('load booking status');
@@ -214,7 +223,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
 
     // Xóa tất cả các dữ liệu trong SharedPreferences
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();  // Thêm dòng này để xóa hết dữ liệu đã lưu
+    await prefs.clear(); // Thêm dòng này để xóa hết dữ liệu đã lưu
 
     // Cập nhật trạng thái ban đầu
     if (_locationTimer != null) {
@@ -223,13 +232,13 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     }
 
     setState(() {
-      isSuccessBooked = false;  // Đặt lại trạng thái đặt chỗ
-      _hospitalLocation = null;  // Xóa vị trí bệnh viện
-      _destinationLocation = null;  // Xóa vị trí điểm đến
-      _driverName = '';  // Xóa tên tài xế
-      _driverPhone = '';  // Xóa số điện thoại tài xế
-      _driverId = '';  // Xóa ID tài xế
-      _bookingId = '';  // Xóa ID đặt chỗ
+      isSuccessBooked = false; // Đặt lại trạng thái đặt chỗ
+      _hospitalLocation = null; // Xóa vị trí bệnh viện
+      _destinationLocation = null; // Xóa vị trí điểm đến
+      _driverName = ''; // Xóa tên tài xế
+      _driverPhone = ''; // Xóa số điện thoại tài xế
+      _driverId = ''; // Xóa ID tài xế
+      _bookingId = ''; // Xóa ID đặt chỗ
     });
 
     print("Calling resetScreen");
@@ -239,8 +248,6 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       resetScreen();
     });
   }
-
-
 
   Future<void> _updateDriverStatus(int? driverId, String status) async {
     try {
@@ -256,7 +263,6 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       );
 
       if (response.statusCode == 200) {
-
         print("Driver status updated successfully!");
       } else {
         print('Error: ${response.statusCode}, ${response.body}');
@@ -276,7 +282,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
 
       // Thay thế URL API của bạn vào đây
       final response = await http.post(
-        Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/update-status'),
+        Uri.parse(
+            'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/update-status'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'bookingStatus': status,
@@ -297,7 +304,6 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       print('Exception: $error');
     }
   }
-
 
   // Danh sách bệnh viện và danh sách gợi ý
   List<Map<String, dynamic>> allHospitals = [];
@@ -382,7 +388,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
           'Content-Type': 'application/json',
         },
         body: json.encode({
-          'patientId':patientId,
+          'patientId': patientId,
           'latitude': _currentLocation!.latitude,
           'longitude': _currentLocation!.longitude,
           // Thêm các dữ liệu cần thiết khác nếu có
@@ -536,7 +542,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
             final updatePatientData = json.decode(updateUserResponse.body);
 
             // Lấy patientId từ phản hồi
-            final patientIdUpdate = updatePatientData['patientId']; // Đảm bảo DTO có trường này
+            final patientIdUpdate =
+                updatePatientData['patientId']; // Đảm bảo DTO có trường này
             patientId = patientIdUpdate;
             await _bookEmergencyAmbulance();
           } else {
@@ -557,13 +564,16 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
             }),
           );
 
-          if (registerUserResponse.statusCode == 201) {;
-          final registeredPatientData = json.decode(registerUserResponse.body);
+          if (registerUserResponse.statusCode == 201) {
+            ;
+            final registeredPatientData =
+                json.decode(registerUserResponse.body);
 
-          // Lấy patientId từ phản hồi
-          final patientIdRegister = registeredPatientData['patientId']; // Đảm bảo DTO có trường này
-          patientId = patientIdRegister;
-          print('Registered patientId: $patientId');
+            // Lấy patientId từ phản hồi
+            final patientIdRegister =
+                registeredPatientData['patientId']; // Đảm bảo DTO có trường này
+            patientId = patientIdRegister;
+            print('Registered patientId: $patientId');
             await _bookEmergencyAmbulance();
           } else {
             print('Error while registering new user');
@@ -594,7 +604,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     Future<void> _checkBookingStatus(int? bookingId1) async {
       try {
         // Gọi API để kiểm tra trạng thái booking
-        final response = await http.get(Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/$bookingId1'));
+        final response = await http.get(Uri.parse(
+            'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/$bookingId1'));
         print('check status booking with booking ' + bookingId1.toString());
         if (response.statusCode == 200) {
           // Parse JSON
@@ -614,11 +625,13 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
         print('Error: $e');
       }
     }
+
     void startCheckingBookingStatus(int? bookingId1) {
       _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) async {
         await _checkBookingStatus(bookingId1);
       });
     }
+
     if (bookingLocation != null && _estimatedCost != null) {
       final bookingData = {
         'patient': {'email': email},
@@ -633,7 +646,6 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
         'ambulanceType': ambulanceType, // Loại xe cứu thương
       };
 
-
       try {
         final response = await http.post(
           Uri.parse(
@@ -644,11 +656,13 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
         print(bookingData.toString());
         if (response.statusCode == 200 || response.statusCode == 201) {
           final bookingResponse = json.decode(response.body); // Lấy phản hồi
-          bookingId1 =
-              bookingResponse['bookingId'];
+          bookingId1 = bookingResponse['bookingId'];
           startCheckingBookingStatus(bookingId1);
-          print(bookingId1.toString() + " =========== booking Id"); // Lấy bookingId từ phản hồi API
+          print(bookingId1.toString() +
+              " =========== booking Id"); // Lấy bookingId từ phản hồi API
           _bookingId = bookingId1.toString();
+          _openWebSocketConnection(int.parse(_bookingId)
+              ); // Tạo kết nối WebSocket với role là "customer"
           _findNearestDriver(
               bookingId1); // Gửi bookingId vào hàm _findNearestDriver
 
@@ -674,6 +688,42 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     setState(() {
       isLoading = false;
     });
+  }
+
+
+  void _openWebSocketConnection(int? bookingId) {
+    _channel = IOWebSocketChannel.connect(
+        'wss://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/ws/common?id=$bookingId&role=customer'); // Kết nối với bookingId và role (customer hoặc driver)
+
+    // Nghe dữ liệu từ WebSocket
+    _channel!.stream.listen((message) {
+      print("Received from WebSocket: $message");
+
+      // Cập nhật danh sách tin nhắn
+      setState(() {
+        messages.add(message); // Thêm tin nhắn mới vào danh sách
+      });
+    }, onDone: () {
+      print("WebSocket closed");
+    }, onError: (error) {
+      print("WebSocket error: $error");
+    });
+  }
+
+// Hàm gửi tin nhắn có thể gọi ở bất kỳ đâu sau khi WebSocket đã kết nối
+  void sendMessage(int? bookingId, String message) {
+    if (_channel != null && message.isNotEmpty) {
+      Map<String, dynamic> data = {
+        'type': 'send_message',
+        'id': bookingId,
+        'role': 'customer', // Role là customer hoặc driver tùy theo
+        'message': message
+      };
+      _channel!.sink.add(jsonEncode(data)); // Gửi dữ liệu JSON qua WebSocket
+      print("Sent message: $message");
+    } else {
+      print("WebSocket channel is not connected or message is empty.");
+    }
   }
 
   Future<void> _findNearestDriver(int? bookingId) async {
@@ -711,32 +761,35 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
             if (activeDrivers.isNotEmpty) {
               // Lấy tài xế đầu tiên trong danh sách tài xế active
               // Sử dụng int.tryParse để chuyển đổi driverId an toàn
-                // Hiển thị thông báo tài xế gần nhất
-                showTemporaryMessage(context,
-                    'Nearest active driver: ${activeDrivers[0]['driverPhone']}, Name: ${activeDrivers[0]['driverName']}');
-                _driverName = activeDrivers[0]['driverName'];
-                _driverPhone = activeDrivers[0]['driverPhone'];
-                driverPhone = _driverPhone;
-                driverName = _driverName;
-                _driverId = activeDrivers[0]['driverId'].toString();
-                _saveMarkerPositions();
-                print(driverName);
-                print(driverPhone);
+              // Hiển thị thông báo tài xế gần nhất
+              showTemporaryMessage(context,
+                  'Nearest active driver: ${activeDrivers[0]['driverPhone']}, Name: ${activeDrivers[0]['driverName']}');
+              _driverName = activeDrivers[0]['driverName'];
+              _driverPhone = activeDrivers[0]['driverPhone'];
+              driverPhone = _driverPhone;
+              driverName = _driverName;
+              _driverId = activeDrivers[0]['driverId'].toString();
+              _saveMarkerPositions();
+              print(driverName);
+              print(driverPhone);
               final driverIdStr = activeDrivers[0]['driverId'].toString();
-                final driverId = int.tryParse(driverIdStr);
-                driverId2 = driverId;
-                if (driverId != null) {
-                  String status = "Deactive";
-                  await _updateDriverStatus(
-                      driverId2, status); // Chuyển driverId sang chuỗi
-                  print('ok');
+              final driverId = int.tryParse(driverIdStr);
+              driverId2 = driverId;
+              if (driverId != null) {
+                String status = "Deactive";
+                await _updateDriverStatus(
+                    driverId2, status); // Chuyển driverId sang chuỗi
+                print('ok');
                 // Cập nhật đơn đặt xe với driverId và bookingId
                 await _updateBookingWithDriverId(driverId, bookingId1);
                 getDriverLocation = true;
                 if (updateLocation == false) {
-                  _locationTimer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
+                  _locationTimer =
+                      Timer.periodic(Duration(seconds: 5), (Timer timer) {
                     try {
-                      print("id tài xế " + driverId2.toString() + " đang lấy vị trí tài xế");
+                      print("id tài xế " +
+                          driverId2.toString() +
+                          " đang lấy vị trí tài xế");
                       _getDriverLocationAndUpdateMap(driverId2);
                       if (!updateLocation) {
                         if (_currentLocation != null) {
@@ -748,7 +801,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                       print('Error converting driver ID to int: $e');
                     }
                   });
-                  print(driverId.toString() + " dang cap nhat gui vi tri + thu vi tri");
+                  print(driverId.toString() +
+                      " dang cap nhat gui vi tri + thu vi tri");
                 }
               } else {
                 print("Error converting driver ID to int");
@@ -931,33 +985,115 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Column(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.only(left: 10),
-                                child: Text(
-                                  'Driver: ${driverName ?? _driverName}',  // Kiểm tra nếu driverName là null thì lấy từ _driverName đã lưu
-                                  style: const TextStyle(
-                                      color: blackColor,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16),
-                                  textAlign: TextAlign.left,
+                              SizedBox(
+                                height: 40,
+                                width: 150,
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    final Uri launchUri = Uri(
+                                      scheme: 'tel',
+                                      path: driverPhone ?? _driverPhone,
+                                    );
+                                    await launch(launchUri.toString());
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: primaryColor,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(0),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Call Driver',
+                                    style: TextStyle(
+                                        color: whiteColor,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(
-                                height: 20,
+                              SizedBox(
+                                height: 10,
                               ),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 10),
-                                child: Text(
-                                  'Phone Number: ${driverPhone ?? _driverPhone}',  // Kiểm tra nếu driverPhone là null thì lấy _driverPhone từ SharedPreferences
-                                  style: const TextStyle(
-                                      color: blackColor,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16),
+                              SizedBox(
+                                height: 40,
+                                width: 150,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    // Hiển thị popup nhập tin nhắn và danh sách tin nhắn
+                                    showDialog(
+                                      context: context,
+                                      builder: (BuildContext context) {
+                                        TextEditingController messageController =
+                                        TextEditingController();
+                                        return AlertDialog(
+                                          title: const Text('Nhắn tin tài xế'),
+                                          content: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              // Thêm đoạn này: Hiển thị danh sách tin nhắn
+                                              Container(
+                                                height: 200, // Chiều cao của danh sách tin nhắn
+                                                child: ListView.builder(
+                                                  itemCount: messages.length,
+                                                  itemBuilder: (context, index) {
+                                                    return ListTile(
+                                                      title: Text(messages[index]),  // Hiển thị tin nhắn
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                height: 10,
+                                              ), // Khoảng cách giữa danh sách tin nhắn và TextField
+                                              // Hộp nhập tin nhắn
+                                              TextField(
+                                                controller: messageController,
+                                                decoration: const InputDecoration(
+                                                  hintText: 'Nhập tin nhắn...',
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () {
+                                                Navigator.of(context).pop();
+                                              },
+                                              child: const Text('Hủy'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () {
+                                                // Gửi tin nhắn qua WebSocket
+                                                final message = messageController.text;
+                                                if (message.isNotEmpty) {
+                                                  sendMessage(int.parse(_bookingId),message);  // Gửi tin nhắn qua WebSocket
+                                                  messageController.clear();                                                  }
+                                              },
+                                              child: const Text('Gửi'),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    );
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: blueColor,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(0),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Message Driver',
+                                    style: TextStyle(
+                                        color: whiteColor,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold),
+                                  ),
                                 ),
-                              )
+                              ),
                             ],
                           ),
                           Column(
@@ -1036,13 +1172,16 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                                             ),
                                             TextButton(
                                               onPressed: () {
-                                                if(bookingId1 != null){
-                                                  _upDateBookingStatus(bookingId1);
-                                                }else{
+                                                if (bookingId1 != null) {
+                                                  _upDateBookingStatus(
+                                                      bookingId1);
+                                                } else {
                                                   try {
-                                                    _upDateBookingStatus(int.parse(_bookingId));
+                                                    _upDateBookingStatus(
+                                                        int.parse(_bookingId));
                                                   } catch (e) {
-                                                    print('Error converting _bookingId to int: $e');
+                                                    print(
+                                                        'Error converting _bookingId to int: $e');
                                                   }
                                                 }
                                                 Navigator.of(context).pop();
@@ -1375,7 +1514,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                               // Khi tắt công tắc, cho phép chọn vị trí từ danh sách gợi ý
                               updateLocation = true;
                               _hospitalLocation = null;
-                              _currentLocation = null; // Đặt lại vị trí hiện tại
+                              _currentLocation =
+                                  null; // Đặt lại vị trí hiện tại
                             }
                           });
                         },
