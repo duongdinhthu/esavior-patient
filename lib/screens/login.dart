@@ -592,21 +592,6 @@ class _LoginState extends State<Login> {
                 const SizedBox(
                   width: 10,
                 ),
-                // Nút đăng nhập Google
-                GoogleSignInButton(
-                  onLoginSuccess: (patientName, patientId) async {
-                    print('Logged in with Google: $patientName');
-
-                    // Lưu trạng thái đăng nhập Google vào SharedPreferences
-                    SharedPreferences prefs = await SharedPreferences.getInstance();
-                    await prefs.setInt('patient_id', int.parse(patientId));
-
-                    widget.onLogin(int.parse(patientId));
-                    Navigator.pop(context);
-                  },
-                ),
-
-
                 Container(
                   alignment: Alignment.centerLeft,
                   child: GestureDetector(
@@ -622,6 +607,32 @@ class _LoginState extends State<Login> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(
+              height: 20,
+            ),
+            const Center(
+              child: Text('OR', style: TextStyle(
+                color: blackColor, fontWeight: FontWeight.bold, fontSize: 16
+              ),),
+            ),
+            const SizedBox(
+              height: 20,
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: GoogleSignInButton(
+                onLoginSuccess: (patientName, patientId) async {
+                  print('Logged in with Google: $patientName');
+
+                  // Lưu trạng thái đăng nhập Google vào SharedPreferences
+                  SharedPreferences prefs = await SharedPreferences.getInstance();
+                  await prefs.setInt('patient_id', int.parse(patientId));
+
+                  widget.onLogin(int.parse(patientId));
+                  Navigator.pop(context);
+                },
+              ),
             )
           ],
         ));

@@ -968,8 +968,13 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                                 height: 40,
                                 width: 150,
                                 child: ElevatedButton(
-                                  onPressed: () =>
-                                      callPhoneNumber(driverPhone ?? _driverPhone),
+                                  onPressed: () async {
+                                    final Uri launchUri = Uri(
+                                      scheme: 'tel',
+                                      path: driverPhone ?? _driverPhone,
+                                    );
+                                    await launch(launchUri.toString());
+                                  },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: primaryColor,
                                     shape: RoundedRectangleBorder(
