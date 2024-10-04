@@ -504,7 +504,6 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       isLoading = false;
     });
   }
-
   Future<void> _submitForm() async {
     setState(() {
       isLoading = true;
@@ -512,6 +511,10 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       print('kiem tra email');
+      print('Full name entered: $patientName');
+      print('Email entered: $email');
+      print('Phone entered: $phoneNumber');
+      // Kiểm tra giá trị patientName
 
       // Kiểm tra email
       final checkEmailResponse = await http.post(
@@ -601,37 +604,6 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       pickupAddress = hospitalNameController.text;
     }
 
-    Future<void> _checkBookingStatus(int? bookingId1) async {
-      try {
-        // Gọi API để kiểm tra trạng thái booking
-        final response = await http.get(Uri.parse(
-            'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/$bookingId1'));
-        print('check status booking with booking ' + bookingId1.toString());
-        if (response.statusCode == 200) {
-          // Parse JSON
-          final bookingData = jsonDecode(response.body);
-          // Kiểm tra nếu `type` là 'Completed'
-          if (bookingData['bookingStatus'] == 'Completed') {
-            _clearBookingStatus();
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => EmergencyBooking()),
-            );
-          }
-        } else {
-          print('Failed to load booking');
-        }
-      } catch (e) {
-        print('Error: $e');
-      }
-    }
-
-    void startCheckingBookingStatus(int? bookingId1) {
-      _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) async {
-        await _checkBookingStatus(bookingId1);
-      });
-    }
-
     if (bookingLocation != null && _estimatedCost != null) {
       final bookingData = {
         'patient': {'email': email},
@@ -653,7 +625,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
           headers: {'Content-Type': 'application/json'},
           body: json.encode(bookingData),
         );
-        print(bookingData.toString());
+        print("du lieu ínsert booking " + bookingData.toString());
         if (response.statusCode == 200 || response.statusCode == 201) {
           final bookingResponse = json.decode(response.body); // Lấy phản hồi
           bookingId1 = bookingResponse['bookingId'];
@@ -690,7 +662,36 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
     });
   }
 
+  Future<void> _checkBookingStatus(int? bookingId1) async {
+    try {
+      // Gọi API để kiểm tra trạng thái booking
+      final response = await http.get(Uri.parse(
+          'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/$bookingId1'));
+      print('check status booking with booking ' + bookingId1.toString());
+      if (response.statusCode == 200) {
+        // Parse JSON
+        final bookingData = jsonDecode(response.body);
+        // Kiểm tra nếu `type` là 'Completed'
+        if (bookingData['bookingStatus'] == 'Completed') {
+          _clearBookingStatus();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => EmergencyBooking()),
+          );
+        }
+      } else {
+        print('Failed to load booking');
+      }
+    } catch (e) {
+      print('Error: $e');
+    }
+  }
 
+  void startCheckingBookingStatus(int? bookingId1) {
+    _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) async {
+      await _checkBookingStatus(bookingId1);
+    });
+  }
   void _openWebSocketConnection(int? bookingId) {
     _channel = IOWebSocketChannel.connect(
         'wss://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/ws/common?id=$bookingId&role=customer'); // Kết nối với bookingId và role (customer hoặc driver)
@@ -1246,7 +1247,12 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                       SizedBox(
                         width: double.infinity,
                         child: TextFormField(
-                          onSaved: (value) => patientName = value!,
+                          onChanged: (value) {
+                            setState(() {
+                              patientName = value;  // Lưu giá trị ngay khi người dùng nhập
+                            });
+                            print('Updated patientName: $patientName');
+                          },
                           cursorColor: Colors.black54,
                           style: const TextStyle(
                               color: blackColor,
@@ -1311,7 +1317,12 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                         width: double.infinity,
                         child: TextFormField(
                           keyboardType: TextInputType.emailAddress,
-                          onSaved: (value) => email = value!,
+                          onChanged: (value) {
+                            setState(() {
+                              email = value;  // Lưu giá trị ngay khi người dùng nhập
+                            });
+                            print('Updated email: $email');
+                          },
                           cursorColor: Colors.black54,
                           style: const TextStyle(
                               color: blackColor,
@@ -1380,8 +1391,12 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                         width: double.infinity,
                         child: TextFormField(
                           keyboardType: TextInputType.phone,
-                          onSaved: (value) => phoneNumber = value!,
-                          cursorColor: Colors.black54,
+                          onChanged: (value) {
+                            setState(() {
+                              phoneNumber = value;  // Lưu giá trị ngay khi người dùng nhập
+                            });
+                            print('Updated phoneNumber: $phoneNumber');
+                          },                          cursorColor: Colors.black54,
                           style: const TextStyle(
                               color: blackColor,
                               fontSize: 16.0,
