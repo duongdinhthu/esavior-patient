@@ -10,6 +10,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/io.dart';
 
+import 'chat_message.dart';
+
 const primaryColor = Color.fromARGB(255, 200, 50, 0);
 const whiteColor = Color.fromARGB(255, 255, 255, 255);
 const blackColor = Color.fromARGB(255, 0, 0, 0);
@@ -53,7 +55,9 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
   int? bookingId1;
   Timer? _timer;
   IOWebSocketChannel? _channel; // Biến toàn cục để lưu WebSocket channel
-  List<String> messages = []; // Danh sách lưu trữ tin nhắn
+  List<ChatMessage> messages = []; // Danh sách lưu trữ tin nhắn
+  bool openSocket = false;
+  Stream? broadcastStream;
 
   @override
   void initState() {
@@ -504,6 +508,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       isLoading = false;
     });
   }
+
   Future<void> _submitForm() async {
     setState(() {
       isLoading = true;
@@ -633,8 +638,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
           print(bookingId1.toString() +
               " =========== booking Id"); // Lấy bookingId từ phản hồi API
           _bookingId = bookingId1.toString();
-          _openWebSocketConnection(int.parse(_bookingId)
-              ); // Tạo kết nối WebSocket với role là "customer"
+          _openWebSocketConnection(int.parse(
+              _bookingId)); // Tạo kết nối WebSocket với role là "customer"
           _findNearestDriver(
               bookingId1); // Gửi bookingId vào hàm _findNearestDriver
 
@@ -692,40 +697,78 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
       await _checkBookingStatus(bookingId1);
     });
   }
-  void _openWebSocketConnection(int? bookingId) {
-    _channel = IOWebSocketChannel.connect(
-        'wss://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/ws/common?id=$bookingId&role=customer'); // Kết nối với bookingId và role (customer hoặc driver)
 
-    // Nghe dữ liệu từ WebSocket
-    _channel!.stream.listen((message) {
-      print("Received from WebSocket: $message");
+  void _openWebSocketConnection(int? bookingId, {Function? setStateDialog}) {
+    // Kiểm tra xem WebSocket đã được mở hay chưa, nếu chưa thì mở kết nối
+    if (_channel == null) {
+      // Kết nối WebSocket với role là "customer"
+      _channel = IOWebSocketChannel.connect(
+          'wss://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/ws/common?id=$bookingId&role=customer');
 
-      // Cập nhật danh sách tin nhắn
-      setState(() {
-        messages.add(message); // Thêm tin nhắn mới vào danh sách
+      // Chuyển đổi thành BroadcastStream và đảm bảo không bị null
+      broadcastStream = _channel!.stream.asBroadcastStream();
+      print("_channel connected");
+
+      // Lắng nghe dữ liệu từ WebSocket
+      broadcastStream!.listen((message) {
+        // Không cần dấu hỏi vì đã chắc chắn không null
+        if (message.isNotEmpty) {
+          print("Received from WebSocket: $message");
+
+          // Lấy giá trị 'message' từ chuỗi WebSocket nhận được
+          RegExp regex = RegExp(r'message=([^,}]+)');
+          Match? match = regex.firstMatch(message);
+          if (match != null) {
+            String mess = match.group(1) ?? '';
+            print('Received message: $mess');
+
+            // Cập nhật danh sách tin nhắn
+            if (setStateDialog != null) {
+              setStateDialog(() {
+                messages.add(ChatMessage(message: mess));
+                print("Updated message in dialog");
+              });
+            } else {
+              setState(() {
+                messages.add(ChatMessage(message: mess));
+                print("Updated message without dialog");
+              });
+            }
+          }
+        }
+      }, onDone: () {
+        print("WebSocket closed");
+      }, onError: (error) {
+        // Log lỗi chi tiết
+        print("WebSocket error: $error");
       });
-    }, onDone: () {
-      print("WebSocket closed");
-    }, onError: (error) {
-      print("WebSocket error: $error");
-    });
+
+      openSocket = true; // Đặt trạng thái đã mở WebSocket
+    }
   }
+
 
 // Hàm gửi tin nhắn có thể gọi ở bất kỳ đâu sau khi WebSocket đã kết nối
   void sendMessage(int? bookingId, String message) {
     if (_channel != null && message.isNotEmpty) {
+      // Tạo dữ liệu JSON với role là "customer"
       Map<String, dynamic> data = {
         'type': 'send_message',
         'id': bookingId,
-        'role': 'customer', // Role là customer hoặc driver tùy theo
+        'role': 'customer',  // Role là khách hàng
         'message': message
       };
-      _channel!.sink.add(jsonEncode(data)); // Gửi dữ liệu JSON qua WebSocket
-      print("Sent message: $message");
+
+      // Gửi dữ liệu qua WebSocket
+      _channel!.sink.add(jsonEncode(data));
+      print("Sent message: $message with bookingId: ${bookingId.toString()}");
     } else {
       print("WebSocket channel is not connected or message is empty.");
     }
   }
+
+
+
 
   Future<void> _findNearestDriver(int? bookingId) async {
     print('bat dau tim tai xe ');
@@ -893,6 +936,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
   @override
   void dispose() {
     _positionStream?.cancel();
+    _channel?.sink.close();    // Đảm bảo đóng WebSocket
     hospitalNameController.dispose();
     destinationController.dispose();
     super.dispose();
@@ -1027,59 +1071,96 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                                     showDialog(
                                       context: context,
                                       builder: (BuildContext context) {
-                                        TextEditingController messageController =
-                                        TextEditingController();
-                                        return AlertDialog(
-                                          title: const Text('Nhắn tin tài xế'),
-                                          content: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              // Thêm đoạn này: Hiển thị danh sách tin nhắn
-                                              Container(
-                                                height: 200, // Chiều cao của danh sách tin nhắn
-                                                child: ListView.builder(
-                                                  itemCount: messages.length,
-                                                  itemBuilder: (context, index) {
-                                                    return ListTile(
-                                                      title: Text(messages[index]),  // Hiển thị tin nhắn
-                                                    );
+                                        TextEditingController messageController = TextEditingController();
+                                        return StatefulBuilder(
+                                          builder: (context, setStateDialog) {
+                                            // Kiểm tra nếu WebSocket chưa mở, chỉ mở một lần khi hiển thị popup
+                                            if (!openSocket) {
+                                              _openWebSocketConnection(bookingId1, setStateDialog: setStateDialog);
+                                            }
+
+                                            return AlertDialog(
+                                              title: const Text('Nhắn tin tài xế'),
+                                              content: Container(
+                                                width: double.maxFinite,
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Expanded(
+                                                      child: StreamBuilder(
+                                                        stream: broadcastStream,
+                                                        builder: (context, snapshot) {
+                                                          if (snapshot.hasData) {
+                                                            // Giải mã dữ liệu nhận được từ WebSocket (snapshot.data là chuỗi JSON)
+                                                            try {
+                                                              Map<String, dynamic> messageData = jsonDecode(snapshot.data.toString());
+                                                              String mess = messageData['message'] ?? ''; // Chỉ lấy phần 'message'
+
+                                                              // Thêm tin nhắn vào danh sách
+                                                              messages.add(ChatMessage(message: mess));
+                                                            } catch (e) {
+                                                              print('Error decoding message: $e');
+                                                            }
+
+                                                            // Hiển thị danh sách tin nhắn
+                                                            return ListView.builder(
+                                                              itemCount: messages.length,
+                                                              itemBuilder: (context, index) {
+                                                                ChatMessage chatMessage = messages[index];
+                                                                return ListTile(
+                                                                  title: Text(chatMessage.message),
+                                                                );
+                                                              },
+                                                            );
+                                                          } else {
+                                                            return const Center(
+                                                              child: Text(
+                                                                'Chưa có tin nhắn',
+                                                                style: TextStyle(fontSize: 16, color: Colors.grey),
+                                                              ),
+                                                            );
+                                                          }
+                                                        },
+                                                      ),
+                                                    ),
+                                                    TextField(
+                                                      controller: messageController,
+                                                      decoration: const InputDecoration(
+                                                        hintText: 'Nhập tin nhắn...',
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () {
+                                                    Navigator.of(context).pop();
                                                   },
+                                                  child: const Text('Hủy'),
                                                 ),
-                                              ),
-                                              const SizedBox(
-                                                height: 10,
-                                              ), // Khoảng cách giữa danh sách tin nhắn và TextField
-                                              // Hộp nhập tin nhắn
-                                              TextField(
-                                                controller: messageController,
-                                                decoration: const InputDecoration(
-                                                  hintText: 'Nhập tin nhắn...',
+                                                TextButton(
+                                                  onPressed: () {
+                                                    final message = messageController.text;
+                                                    if (message.isNotEmpty) {
+                                                      sendMessage(bookingId1, message); // Chỉ gọi hàm sendMessage khi nhấn nút Gửi
+                                                      messageController.clear();
+                                                      setStateDialog(() {
+                                                        messages.add(ChatMessage(message: message));
+                                                      });
+                                                    }
+                                                  },
+                                                  child: const Text('Gửi'),
                                                 ),
-                                              ),
-                                            ],
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () {
-                                                Navigator.of(context).pop();
-                                              },
-                                              child: const Text('Hủy'),
-                                            ),
-                                            TextButton(
-                                              onPressed: () {
-                                                // Gửi tin nhắn qua WebSocket
-                                                final message = messageController.text;
-                                                if (message.isNotEmpty) {
-                                                  sendMessage(int.parse(_bookingId),message);  // Gửi tin nhắn qua WebSocket
-                                                  messageController.clear();                                                  }
-                                              },
-                                              child: const Text('Gửi'),
-                                            ),
-                                          ],
+                                              ],
+                                            );
+                                          },
                                         );
                                       },
                                     );
                                   },
+
+
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: blueColor,
                                     shape: RoundedRectangleBorder(
@@ -1249,7 +1330,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                         child: TextFormField(
                           onChanged: (value) {
                             setState(() {
-                              patientName = value;  // Lưu giá trị ngay khi người dùng nhập
+                              patientName =
+                                  value; // Lưu giá trị ngay khi người dùng nhập
                             });
                             print('Updated patientName: $patientName');
                           },
@@ -1319,7 +1401,8 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                           keyboardType: TextInputType.emailAddress,
                           onChanged: (value) {
                             setState(() {
-                              email = value;  // Lưu giá trị ngay khi người dùng nhập
+                              email =
+                                  value; // Lưu giá trị ngay khi người dùng nhập
                             });
                             print('Updated email: $email');
                           },
@@ -1393,10 +1476,12 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                           keyboardType: TextInputType.phone,
                           onChanged: (value) {
                             setState(() {
-                              phoneNumber = value;  // Lưu giá trị ngay khi người dùng nhập
+                              phoneNumber =
+                                  value; // Lưu giá trị ngay khi người dùng nhập
                             });
                             print('Updated phoneNumber: $phoneNumber');
-                          },                          cursorColor: Colors.black54,
+                          },
+                          cursorColor: Colors.black54,
                           style: const TextStyle(
                               color: blackColor,
                               fontSize: 16.0,
