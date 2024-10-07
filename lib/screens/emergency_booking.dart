@@ -737,10 +737,12 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
           }
         }
       }, onDone: () {
-        print("WebSocket closed");
+        print("WebSocket closed , tiến hành kết nối lại");
+        _openWebSocketConnection(int.parse(_bookingId));
       }, onError: (error) {
         // Log lỗi chi tiết
-        print("WebSocket error: $error");
+        print("WebSocket error: $error , tiến hành kết nối lại");
+        _openWebSocketConnection(int.parse(_bookingId));
       });
 
       openSocket = true; // Đặt trạng thái đã mở WebSocket
@@ -752,6 +754,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
   void sendMessage(int? bookingId, String message) {
     if (_channel != null && message.isNotEmpty) {
       // Tạo dữ liệu JSON với role là "customer"
+      print('Booking id là :' + bookingId.toString() + "mess là :" + message);
       Map<String, dynamic> data = {
         'type': 'send_message',
         'id': bookingId,
@@ -761,6 +764,7 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
 
       // Gửi dữ liệu qua WebSocket
       _channel!.sink.add(jsonEncode(data));
+      print("json gui di " + jsonEncode(data).toString());
       print("Sent message: $message with bookingId: ${bookingId.toString()}");
     } else {
       print("WebSocket channel is not connected or message is empty.");
@@ -1026,282 +1030,234 @@ class _EmergencyBookingState extends State<EmergencyBooking> {
                     child: Container(
                       width: double.infinity,
                       color: whiteColor,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Column(
                         children: [
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
-                              SizedBox(
-                                height: 40,
-                                width: 150,
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    final Uri launchUri = Uri(
-                                      scheme: 'tel',
-                                      path: driverPhone ?? _driverPhone,
-                                    );
-                                    await launch(launchUri.toString());
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryColor,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(0),
-                                    ),
+                              // Nút "Call Driver"
+                              ElevatedButton.icon(
+                                onPressed: () async {
+                                  final Uri launchUri = Uri(
+                                    scheme: 'tel',
+                                    path: driverPhone ?? _driverPhone,
+                                  );
+                                  await launch(launchUri.toString());
+                                },
+                                icon: const Icon(Icons.call, color: whiteColor), // Icon cho nút "Call"
+                                label: const Text(
+                                  'Call Driver',
+                                  style: TextStyle(
+                                    color: whiteColor,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  child: const Text(
-                                    'Call Driver',
-                                    style: TextStyle(
-                                        color: whiteColor,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8.0),
                                   ),
                                 ),
                               ),
-                              SizedBox(
-                                height: 10,
-                              ),
-                              SizedBox(
-                                height: 40,
-                                width: 150,
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    // Hiển thị popup nhập tin nhắn và danh sách tin nhắn
-                                    showDialog(
-                                      context: context,
-                                      builder: (BuildContext context) {
-                                        TextEditingController messageController = TextEditingController();
-                                        return StatefulBuilder(
-                                          builder: (context, setStateDialog) {
-                                            // Kiểm tra nếu WebSocket chưa mở, chỉ mở một lần khi hiển thị popup
-                                            if (!openSocket) {
-                                              _openWebSocketConnection(bookingId1, setStateDialog: setStateDialog);
-                                            }
 
-                                            return AlertDialog(
-                                              title: const Text('Nhắn tin tài xế'),
-                                              content: Container(
-                                                width: double.maxFinite,
-                                                child: Column(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Expanded(
-                                                      child: StreamBuilder(
-                                                        stream: broadcastStream,
-                                                        builder: (context, snapshot) {
-                                                          if (snapshot.hasData) {
-                                                            // Giải mã dữ liệu nhận được từ WebSocket (snapshot.data là chuỗi JSON)
-                                                            try {
-                                                              Map<String, dynamic> messageData = jsonDecode(snapshot.data.toString());
-                                                              String mess = messageData['message'] ?? ''; // Chỉ lấy phần 'message'
-
-                                                              // Thêm tin nhắn vào danh sách
-                                                              messages.add(ChatMessage(message: mess));
-                                                            } catch (e) {
-                                                              print('Error decoding message: $e');
-                                                            }
-
-                                                            // Hiển thị danh sách tin nhắn
-                                                            return ListView.builder(
-                                                              itemCount: messages.length,
-                                                              itemBuilder: (context, index) {
-                                                                ChatMessage chatMessage = messages[index];
-                                                                return ListTile(
-                                                                  title: Text(chatMessage.message),
-                                                                );
-                                                              },
-                                                            );
-                                                          } else {
-                                                            return const Center(
-                                                              child: Text(
-                                                                'Chưa có tin nhắn',
-                                                                style: TextStyle(fontSize: 16, color: Colors.grey),
-                                                              ),
-                                                            );
+                              // Nút "Message Driver"
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  // Hiển thị popup nhập tin nhắn và danh sách tin nhắn
+                                  showDialog(
+                                    context: context,
+                                    builder: (BuildContext context) {
+                                      TextEditingController messageController = TextEditingController();
+                                      return StatefulBuilder(
+                                        builder: (context, setStateDialog) {
+                                          if (!openSocket) {
+                                            _openWebSocketConnection(
+                                                int.parse(_bookingId), setStateDialog: setStateDialog);
+                                          }
+                                          return AlertDialog(
+                                            title: const Text('Nhắn tin tài xế'),
+                                            content: Container(
+                                              width: double.maxFinite,
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Expanded(
+                                                    child: StreamBuilder(
+                                                      stream: broadcastStream,
+                                                      builder: (context, snapshot) {
+                                                        if (snapshot.hasData) {
+                                                          try {
+                                                            Map<String, dynamic> messageData = jsonDecode(
+                                                                snapshot.data.toString());
+                                                            String mess = messageData['message'] ?? '';
+                                                            messages.add(ChatMessage(message: mess));
+                                                          } catch (e) {
+                                                            print('Error decoding message: $e');
                                                           }
-                                                        },
-                                                      ),
+                                                          return ListView.builder(
+                                                            itemCount: messages.length,
+                                                            itemBuilder: (context, index) {
+                                                              ChatMessage chatMessage = messages[index];
+                                                              return ListTile(
+                                                                title: Text(chatMessage.message),
+                                                              );
+                                                            },
+                                                          );
+                                                        } else {
+                                                          return const Center(
+                                                            child: Text(
+                                                              'Chưa có tin nhắn',
+                                                              style: TextStyle(fontSize: 16, color: Colors.grey),
+                                                            ),
+                                                          );
+                                                        }
+                                                      },
                                                     ),
-                                                    TextField(
-                                                      controller: messageController,
-                                                      decoration: const InputDecoration(
-                                                        hintText: 'Nhập tin nhắn...',
-                                                      ),
+                                                  ),
+                                                  TextField(
+                                                    controller: messageController,
+                                                    decoration: const InputDecoration(
+                                                      hintText: 'Nhập tin nhắn...',
                                                     ),
-                                                  ],
-                                                ),
+                                                  ),
+                                                ],
                                               ),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () {
-                                                    Navigator.of(context).pop();
-                                                  },
-                                                  child: const Text('Hủy'),
-                                                ),
-                                                TextButton(
-                                                  onPressed: () {
-                                                    final message = messageController.text;
-                                                    if (message.isNotEmpty) {
-                                                      sendMessage(bookingId1, message); // Chỉ gọi hàm sendMessage khi nhấn nút Gửi
-                                                      messageController.clear();
-                                                      setStateDialog(() {
-                                                        messages.add(ChatMessage(message: message));
-                                                      });
-                                                    }
-                                                  },
-                                                  child: const Text('Gửi'),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        );
-                                      },
-                                    );
-                                  },
-
-
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: blueColor,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(0),
-                                    ),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.of(context).pop();
+                                                },
+                                                child: const Text('Hủy'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () {
+                                                  final message = messageController.text;
+                                                  if (message.isNotEmpty) {
+                                                    sendMessage(int.parse(_bookingId), message);
+                                                    messageController.clear();
+                                                    setStateDialog(() {
+                                                      messages.add(ChatMessage(message: message));
+                                                    });
+                                                  }
+                                                },
+                                                child: const Text('Gửi'),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      );
+                                    },
+                                  );
+                                },
+                                icon: const Icon(Icons.message, color: whiteColor), // Icon cho nút "Message"
+                                label: const Text(
+                                  'Message Driver',
+                                  style: TextStyle(
+                                    color: whiteColor,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  child: const Text(
-                                    'Message Driver',
-                                    style: TextStyle(
-                                        color: whiteColor,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: blueColor,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8.0),
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              SizedBox(
-                                height: 40,
-                                width: 150,
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    final Uri launchUri = Uri(
-                                      scheme: 'tel',
-                                      path: driverPhone ?? _driverPhone,
-                                    );
-                                    await launch(launchUri.toString());
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryColor,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(0),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'Call Driver',
-                                    style: TextStyle(
-                                        color: whiteColor,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                height: 1,
-                                color: whiteColor,
-                              ),
-                              SizedBox(
-                                height: 40,
-                                width: 150,
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (BuildContext context) {
-                                        return AlertDialog(
-                                          backgroundColor: whiteColor,
-                                          title: const Text(
-                                            'Confirm Completion',
+                          const SizedBox(height: 10), // Khoảng cách giữa hai phần nút
+
+                          // Nút "Complete" ở dưới cùng
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (BuildContext context) {
+                                    return AlertDialog(
+                                      backgroundColor: whiteColor,
+                                      title: const Text(
+                                        'Confirm Completion',
+                                        style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: blackColor),
+                                      ),
+                                      content: const Text(
+                                        'Are you sure you want to mark the emergency as completed?',
+                                        style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: blackColor),
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(15),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.of(context).pop();
+                                          },
+                                          child: const Text(
+                                            'Cancel',
                                             style: TextStyle(
-                                                fontSize: 22,
+                                                color: primaryColor,
                                                 fontWeight: FontWeight.bold,
-                                                color: blackColor),
+                                                fontSize: 16),
                                           ),
-                                          content: const Text(
-                                              'Are you sure you want to mark the emergency as completed?',
-                                              style: TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: blackColor)),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(15),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            if (bookingId1 != null) {
+                                              _upDateBookingStatus(bookingId1);
+                                            } else {
+                                              try {
+                                                _upDateBookingStatus(int.parse(_bookingId));
+                                              } catch (e) {
+                                                print('Error converting _bookingId to int: $e');
+                                              }
+                                            }
+                                            Navigator.of(context).pop();
+                                          },
+                                          child: const Text(
+                                            'Confirm',
+                                            style: TextStyle(
+                                                color: primaryColor,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16),
                                           ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () {
-                                                Navigator.of(context).pop();
-                                              },
-                                              child: const Text(
-                                                'Cancel',
-                                                style: TextStyle(
-                                                    color: primaryColor,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16),
-                                              ),
-                                            ),
-                                            TextButton(
-                                              onPressed: () {
-                                                if (bookingId1 != null) {
-                                                  _upDateBookingStatus(
-                                                      bookingId1);
-                                                } else {
-                                                  try {
-                                                    _upDateBookingStatus(
-                                                        int.parse(_bookingId));
-                                                  } catch (e) {
-                                                    print(
-                                                        'Error converting _bookingId to int: $e');
-                                                  }
-                                                }
-                                                Navigator.of(context).pop();
-                                              },
-                                              child: const Text(
-                                                'Confirm',
-                                                style: TextStyle(
-                                                    color: primaryColor,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16),
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
+                                        ),
+                                      ],
                                     );
                                   },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryColor,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(0),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'Complete',
-                                    style: TextStyle(
-                                        color: whiteColor,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold),
-                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.check_circle, color: whiteColor), // Icon cho nút "Complete"
+                              label: const Text(
+                                'Complete',
+                                style: TextStyle(
+                                  color: whiteColor,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              )
-                            ],
-                          )
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8.0),
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  )
+                  ),
                 ],
               )
             : Padding(
